@@ -70,6 +70,7 @@ int tcp_login(const char *server_ip, int tcp_port, char *username) {
 }
 
 void print_menu() {
+    printf("0. 注册用户\n");
     printf("1. 查询在线用户\n");
     printf("2. 查询群组\n");
     printf("3. 私信聊天\n");
@@ -80,7 +81,7 @@ void print_menu() {
     printf("8. 退出登录\n");
 }
 
-void user_work(int sockfd, const char *username) {
+void user_work(int sockfd, const char *username, const char *server_ip, int udp_port) {
     struct epoll_event ev, events[MAX_EVENTS];
     int epfd = epoll_create(1);
     ev.events = EPOLLIN;
@@ -99,6 +100,7 @@ void user_work(int sockfd, const char *username) {
                 ChatMsg msg = {0};
                 strcpy(msg.from, username);
                 switch (cmd) {
+                    case 0: udp_register(server_ip, udp_port); continue;
                     case 1: msg.type = CMD_LIST_USERS; break;
                     case 2: msg.type = CMD_LIST_GROUPS; break;
                     case 3:
@@ -144,17 +146,20 @@ void user_work(int sockfd, const char *username) {
 int main(int argc, char *argv[]) {
     if (argc != 4) usage(argv[0]);
     char username[USERNAME_LEN];
-    int op;
-    printf("1. 注册  2. 登录\n");
-    scanf("%d", &op); getchar();
-    if (op == 1) {
-        udp_register(argv[1], atoi(argv[3]));
-        printf("请重新启动客户端进行登录\n");
-        return 0;
+    while(1) {
+        int op;
+        printf("1. 注册  2. 登录\n");
+        scanf("%d", &op); getchar();
+        if (op == 1) {
+            udp_register(argv[1], atoi(argv[3]));
+            continue;
+            // printf("请重新启动客户端进行登录\n");
+            // return 0;
+        }
+        int sockfd = tcp_login(argv[1], atoi(argv[2]), username);
+        if (sockfd < 0) return 1;
+        printf("登录成功\n");
+        user_work(sockfd, username, argv[1], atoi(argv[3]));
     }
-    int sockfd = tcp_login(argv[1], atoi(argv[2]), username);
-    if (sockfd < 0) return 1;
-    printf("登录成功\n");
-    user_work(sockfd, username);
     return 0;
 }

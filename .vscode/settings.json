@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "epoll.h": "c",
+        "errno.h": "c",
+        "common.h": "c"
+    }
+}

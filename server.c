@@ -28,6 +28,13 @@ int group_count = 0;
 pthread_mutex_t user_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t group_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+
+void print_menu() {
+    printf("1. 私信聊天\n");
+    printf("2. 发送群聊消息\n");
+    printf("3. 广播消息\n");
+}
+
 // 1. UDP注册服务（线程）
 void *udp_register_service(void *arg) {
     int udp_port = *(int*)arg;
@@ -59,6 +66,50 @@ void *udp_register_service(void *arg) {
     }
     return NULL;
 }
+// 服务器处理stdin线程
+void *input_thread(void *arg) {
+    while(1) {
+        print_menu();
+        int cmd; scanf("%d", &cmd); getchar();
+        // ChatMsg msg = {0};
+        // strcpy(msg.from, "服务器");
+        ChatMsg msg = {0};
+        switch (cmd)
+        {
+            case 1:
+                /* 私聊 */
+                printf("目标用户名: "); scanf("%31s", msg.to); getchar();
+                printf("消息内容: "); fgets(msg.data, MSG_LEN, stdin);
+                strcpy(msg.from, "服务器");
+                int flag = 0;
+                pthread_mutex_lock(&user_mutex);
+                for (int i = 0; i < user_count; ++i) {
+                    if (users[i].online && strcmp(users[i].username, msg.to)==0) {
+                        write(users[i].sockfd, &msg, sizeof(msg));
+                        flag = 1;
+                        break;
+                    }
+                }
+                pthread_mutex_unlock(&user_mutex);
+                if(flag) {
+                    printf("消息已发送！\n");
+                }
+                else {
+                    printf("消息未发送，%s不存在或不下线\n", msg.to);
+                }
+                break;
+            case 2:
+                // 
+                break;
+            case 3:
+                // 
+                break;
+            default:
+                printf("无效命令\n");
+                continue;
+        }
+    }
+}
 
 // 在线用户广播，排除fd为except_fd的连接套接字
 void broadcast(const char *msg, int except_fd) {
@@ -68,6 +119,7 @@ void broadcast(const char *msg, int except_fd) {
             write(users[i].sockfd, msg, sizeof(ChatMsg));
     pthread_mutex_unlock(&user_mutex);
 }
+
 
 // 2. TCP主服务（epoll主线程）
 void tcp_service(int tcp_port) {
@@ -83,6 +135,7 @@ void tcp_service(int tcp_port) {
     int epfd = epoll_create(1);
     struct epoll_event ev, events[MAX_CLIENTS];
     ev.events = EPOLLIN;
+
     ev.data.fd = listenfd;
     epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev);
 
@@ -94,7 +147,8 @@ void tcp_service(int tcp_port) {
                 int connfd = accept(listenfd, NULL, NULL);
                 ev.data.fd = connfd;
                 epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &ev);
-            } else {
+            }
+            else {
                 // 客户端消息
                 int fd = events[i].data.fd;
                 if (fd < 0) continue;
@@ -136,7 +190,6 @@ void tcp_service(int tcp_port) {
                     }
                     pthread_mutex_unlock(&user_mutex);
                     if (!found) strcpy(resp.msg, "用户名或密码错误");
-                    printf("success %d", resp.success);
                     write(fd, &resp, sizeof(resp));
                     continue;
                 }
@@ -260,6 +313,8 @@ int main(int argc, char *argv[]) {
     int udp_port = atoi(argv[2]);
     pthread_t tid;
     pthread_create(&tid, NULL, udp_register_service, &udp_port);
+    pthread_t tid2;
+    pthread_create(&tid2, NULL, input_thread, NULL);
     tcp_service(tcp_port);
     return 0;
 }
